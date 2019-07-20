@@ -6,4 +6,6 @@ This can be useful for when you have your Phantom hooked up via it's optical or 
 
 Make sure to configure your Phantom (via Spark) to turn on UPnP support (even if it says beta).
 
-After running this extension and connecting it to your Zone, it will automatically find your Phantoms.
+After running this extension, it will automatically find your Phantoms.
+
+To use this extension within Roon, go to the Roon zone that is playing to the Phantom, and go to device setup. Then change the volume control mechanism to be this extension.
