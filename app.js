@@ -2,7 +2,8 @@
 
 const ssdp = require('node-ssdp').Client,
       upnp = require('node-upnp'),
-      net  = require('net')
+      net  = require('net'),
+      url  = require('url')
       ;
 
 const ssdpclient = new ssdp();
@@ -41,7 +42,6 @@ function Remote(upnp) {
 function Discover(cb) {
     ssdpclient.on('response', async function inResponse(headers, code, rinfo) {
         if (headers.ST == "urn:schemas-upnp-org:service:RenderingControl:2") {
-//        console.log(arguments);
             if (remotes[headers.USN]) return;
 
             let u = new upnp({ url: headers.LOCATION });
@@ -49,15 +49,48 @@ function Discover(cb) {
 
             let desc = await u.getDeviceDescription();
 
+            if (desc) {
 //                console.log("found", desc.UDN, desc.friendlyName,
 //                            desc.manufacturer,
 //                            desc.modelName,
 //                            desc.modelNumber);
 
-            if (desc && desc.manufacturer == "Devialet" && desc.modelName == "Devialet UPnP Renderer") {
-                remote.id = desc.UDN;
-                remote.name = desc.friendlyName;
-                cb(remote);
+                if (desc.manufacturer == "Devialet" && desc.modelName == "Devialet UPnP Renderer") {
+                    remote.id = desc.UDN;
+                    remote.name = desc.friendlyName;
+                    cb(remote, 'connected');
+
+                    const loc = url.parse(headers.LOCATION);
+                    function ping() {
+                        let socket = new net.Socket();
+                        socket.setTimeout(5000);
+                        socket.on("timeout", () => {
+                            if (socket) {
+//                                console.log("pinger", "timeout");
+                                socket.destroy();
+                                socket = undefined;
+                                cb(remote, 'disconnected');
+                            }
+                        });
+                        socket.on("error", err => {
+                            if (socket) {
+//                                console.log("pinger", "error");
+                                socket.destroy();
+                                socket = undefined;
+                                cb(remote, 'disconnected');
+                            }
+                        });
+
+                        socket.connect(loc.port, loc.hostname, () => {
+                            if (socket) {
+//                                console.log("pinger", "connected");
+                                socket.destroy();
+                                setTimeout(function() { ping(); }, 5000)
+                            }
+                        });
+                    }
+                    setTimeout(function() { ping(); }, 5000)
+                }
             }
 
             // My ancient Phantom (the chrome one) does not support this, so I'm giving
@@ -70,7 +103,7 @@ function Discover(cb) {
 
     function search() {
         ssdpclient.search('urn:schemas-upnp-org:service:RenderingControl:2');
-        setTimeout(function() { search(); }, 2000)
+        setTimeout(function() { search(); }, 10000)
     }
 
     search();
@@ -100,10 +133,13 @@ roon.init_services({
 });
 
 function setup() {
-    new Discover((r) => {
+    new Discover((r, what) => {
         if (r.volume_control) { r.volume_control.destroy(); delete(r.volume_control); }
-//        console.log(r);
-        ev_connected(r);
+//        console.log(r, what);
+        if (what == "connected")
+            ev_connected(r);
+        else
+            ev_disconnected(r);
     });
 
     svc_status.set_status("Searching...", false);
@@ -126,8 +162,7 @@ async function ev_connected(r) {
 	    is_muted:     await r.getMute()
 	},
 	set_volume: async function (req, mode, value) {
-            let volume = await r.getVolume();
-	    let newvol = mode == "absolute" ? value : (volume + value);
+	    let newvol = mode == "absolute" ? value : ((await r.getVolume()) + value);
 	    if      (newvol < this.state.volume_min) newvol = this.state.volume_min;
 	    else if (newvol > this.state.volume_max) newvol = this.state.volume_max;
             await r.setVolume(newvol);
@@ -157,12 +192,12 @@ function ev_disconnected(r) {
 }
 
 function ev_volume(r, val) {
-    console.log("[Devialet Phantom Extension] received volume change from device:", val);
+//    console.log("[Devialet Phantom Volume Extension] received volume change from device:", val);
     if (r.volume_control)
         r.volume_control.update_state({ volume_value: val });
 }
 function ev_mute(r, val) {
-    console.log("[Devialet Phantom Extension] received volume change from device:", val);
+//    console.log("[Devialet Phantom Volume Extension] received volume change from device:", val);
     if (r.volume_control)
         r.volume_control.update_state({ is_muted: val });
 }
