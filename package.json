@@ -1,7 +1,7 @@
 {
-  "name": "roon-extension-devialet-phantom-upnp",
+  "name": "roon-extension-devialet-phantom-volume",
   "version": "1.0.0",
-  "description": "Roon Extension to let Roon control the Devialet Phantom Premier devices via UPnP",
+  "description": "Roon Extension to let Roon control the Devialet Phantom Premier's volume via UPnP",
   "main": "app.js",
   "author": "Roon Labs, LLC",
   "license": "Apache-2.0",
